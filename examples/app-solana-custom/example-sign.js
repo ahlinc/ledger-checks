@@ -126,6 +126,17 @@ async function solana_ledger_sign_transaction(transport, derivation_path, transa
   return ledger_send(transport, INS_SIGN_MESSAGE, P1_CONFIRM, payload);
 }
 
+async function solana_ledger_public_key(path) {
+  var [account, change, address_index] = path.split('/');
+
+  var transport = await Transport.create();
+
+  const derivation_path = solana_derivation_path(account, change, address_index);
+  const pubkey_bytes = await solana_ledger_get_pubkey(transport, derivation_path);
+  const pubkey_string = bs58.encode(pubkey_bytes);
+  console.log("--- pubkey:", pubkey_string);
+}
+
 async function solana_ledger_signing_test(from = '', to = '') {
   var [from_account, from_change, from_address_index] = from.split('/');
   var [to_account, to_change, to_address_index] = to.split('/');
@@ -184,19 +195,22 @@ async function solana_ledger_signing_test(from = '', to = '') {
   console.log("--- verifies:", tx.verifySignatures());
 }
 
-
-function cmdline() {
-  program
+(async () => {
+  program.command('sign')
     .option("-f, --from <account/change/address_index>")
-    .option("-t, --to <account/change/address_index>");
+    .option("-t, --to <account/change/address_index>")
+    .action(async (opts) => {
+      // console.log(opts);
+      await solana_ledger_signing_test(opts.from, opts.to);
+    });
+
+  program.command('pubkey')
+    .argument("<account/change/address_index>")
+    .action(async (path) => {
+      // console.log(path);
+      await solana_ledger_public_key(path);
+    });
+
 
   program.parse();
-
-  return program.opts();
-}
-
-(async () => {
-  var opts = cmdline();
-  console.log(opts);
-  solana_ledger_signing_test(opts.from, opts.to);
 })().catch(e => console.log(e));
