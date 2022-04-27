@@ -1,0 +1,18 @@
+{
+  "name": "test",
+  "version": "0.0.1",
+  "description": "test",
+  "main": "example-sign.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "solana",
+  "license": "ISC",
+  "dependencies": {
+    "@ledgerhq/hw-transport-node-hid": "6.27.1",
+    "@solana/web3.js": "^1.41.0",
+    "assert": "2.0.0",
+    "bs58": "5.0.0",
+    "tweetnacl": "1.0.3"
+  }
+}
