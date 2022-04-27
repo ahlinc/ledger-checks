@@ -24,6 +24,7 @@ const bs58 = require("bs58");
 const nacl = require("tweetnacl");
 const solana = require("@solana/web3.js");
 const assert = require("assert");
+const { program } = require("commander");
 
 const INS_GET_PUBKEY = 0x05;
 const INS_SIGN_MESSAGE = 0x06;
@@ -43,7 +44,7 @@ const STATUS_OK = 0x9000;
 /*
  * Helper for chunked send of large payloads
  */
-async function solana_send(transport, instruction, p1, payload) {
+async function ledger_send(transport, instruction, p1, payload) {
   var p2 = 0;
   var payload_offset = 0;
 
@@ -75,11 +76,14 @@ function _harden(n) {
   return (n | BIP32_HARDENED_BIT) >>> 0;
 }
 
-function solana_derivation_path(account, change) {
+function solana_derivation_path(account, change, address_index) {
   var length;
-  if (typeof(account) === 'number') {
-    if (typeof(change) === 'number') {
+  if (typeof (account) === 'number') {
+    if (typeof (change) === 'number') {
       length = 4;
+      if (typeof (address_index) === 'number') {
+        length = 5;
+      }
     } else {
       length = 3;
     }
@@ -95,8 +99,11 @@ function solana_derivation_path(account, change) {
 
   if (length > 2) {
     offset = derivation_path.writeUInt32BE(_harden(account), offset);
-    if (length == 4) {
+    if (length > 3) {
       offset = derivation_path.writeUInt32BE(_harden(change), offset);
+      if (length == 5) {
+        offset = derivation_path.writeUInt32BE(address_index, offset);
+      }
     }
   }
 
@@ -104,7 +111,7 @@ function solana_derivation_path(account, change) {
 }
 
 async function solana_ledger_get_pubkey(transport, derivation_path) {
-  return solana_send(transport, INS_GET_PUBKEY, P1_NON_CONFIRM, derivation_path);
+  return ledger_send(transport, INS_GET_PUBKEY, P1_NON_CONFIRM, derivation_path);
 }
 
 async function solana_ledger_sign_transaction(transport, derivation_path, transaction) {
@@ -116,21 +123,35 @@ async function solana_ledger_sign_transaction(transport, derivation_path, transa
 
   const payload = Buffer.concat([num_paths, derivation_path, msg_bytes]);
 
-  return solana_send(transport, INS_SIGN_MESSAGE, P1_CONFIRM, payload);
+  return ledger_send(transport, INS_SIGN_MESSAGE, P1_CONFIRM, payload);
 }
 
-( async () => {
+async function solana_ledger_signing_test(from = '', to = '') {
+  var [from_account, from_change, from_address_index] = from.split('/');
+  var [to_account, to_change, to_address_index] = to.split('/');
+
+  var from_path = "m/44'/501'";
+  var to_path = "m/44'/501'";
+  if (from_account) from_path += `/${from_account}'`;
+  if (from_change) from_path += `/${from_change}'`;
+  if (from_address_index) from_path += `/${from_address_index}`;
+  if (to_account) to_path += `/${to_account}'`;
+  if (to_change) to_path += `/${to_change}'`;
+  if (to_address_index) to_path += `/${to_address_index}`;
+  console.log(`-- from path: ${from_path}`);
+  console.log(`--   to path: ${to_path}`);
+
   var transport = await Transport.create();
 
-  const from_derivation_path = solana_derivation_path();
+  const from_derivation_path = solana_derivation_path(from_account, from_change, from_address_index);
   const from_pubkey_bytes = await solana_ledger_get_pubkey(transport, from_derivation_path);
   const from_pubkey_string = bs58.encode(from_pubkey_bytes);
-  console.log("---", from_pubkey_string);
+  console.log("--- from pubkey:", from_pubkey_string);
 
-  const to_derivation_path = solana_derivation_path(1);
+  const to_derivation_path = solana_derivation_path(to_account, to_change, to_address_index);
   const to_pubkey_bytes = await solana_ledger_get_pubkey(transport, to_derivation_path);
   const to_pubkey_string = bs58.encode(to_pubkey_bytes);
-  console.log("---", to_pubkey_string);
+  console.log("---   to pubkey:", to_pubkey_string);
 
   const from_pubkey = new solana.PublicKey(from_pubkey_string);
   const to_pubkey = new solana.PublicKey(to_pubkey_string);
@@ -145,14 +166,14 @@ async function solana_ledger_sign_transaction(transport, derivation_path, transa
   // cluster in normal use.
   const recentBlockhash = bs58.encode(Buffer.from([
     3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-      3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
   ]));
 
   var tx = new solana.Transaction({
     recentBlockhash,
     feePayer: from_pubkey,
   })
-  .add(ix);
+    .add(ix);
 
   const sig_bytes = await solana_ledger_sign_transaction(transport, from_derivation_path, tx);
 
@@ -161,5 +182,21 @@ async function solana_ledger_sign_transaction(transport, derivation_path, transa
 
   tx.addSignature(from_pubkey, sig_bytes);
   console.log("--- verifies:", tx.verifySignatures());
-})().catch(e => console.log(e) );
+}
 
+
+function cmdline() {
+  program
+    .option("-f, --from <account/change/address_index>")
+    .option("-t, --to <account/change/address_index>");
+
+  program.parse();
+
+  return program.opts();
+}
+
+(async () => {
+  var opts = cmdline();
+  console.log(opts);
+  solana_ledger_signing_test(opts.from, opts.to);
+})().catch(e => console.log(e));
