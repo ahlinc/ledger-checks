@@ -76,9 +76,9 @@ const bs58 = require("bs58");
         .command("sign-rand-keys")
         .action(async () => {
             const from_keypair = solana.Keypair.generate();
-            console.log("--- from pubkey:", bs58.encode(from_keypair.publicKey.toBuffer()));
+            console.log("--- from pubkey:", from_keypair.publicKey.toBase58());
             const to_keypair = solana.Keypair.generate();
-            console.log("---   to pubkey:", bs58.encode(to_keypair.publicKey.toBuffer()));
+            console.log("---   to pubkey:", to_keypair.publicKey.toBase58());
 
             const ix = solana.SystemProgram.transfer({
                 fromPubkey: from_keypair.publicKey,
@@ -109,7 +109,6 @@ const bs58 = require("bs58");
             const connection = new solana.Connection(solana.clusterApiUrl('mainnet-beta'));
             console.log("--- fee:", await tx.getEstimatedFee(connection));
         });
-
 
     await program.parseAsync();
 })().catch(e => console.log(e));
