@@ -76,7 +76,9 @@ const bs58 = require("bs58");
         .command("sign-rand-keys")
         .action(async () => {
             const from_keypair = solana.Keypair.generate();
+            console.log("--- from pubkey:", bs58.encode(from_keypair.publicKey.toBuffer()));
             const to_keypair = solana.Keypair.generate();
+            console.log("---   to pubkey:", bs58.encode(to_keypair.publicKey.toBuffer()));
 
             const ix = solana.SystemProgram.transfer({
                 fromPubkey: from_keypair.publicKey,
